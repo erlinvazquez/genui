@@ -14,6 +14,8 @@ export const Grid: React.FC<GridProps> = ({ size }) => {
           linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
           linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px)
         `,
+        backgroundPosition: '0 0',
+        backgroundRepeat: 'repeat',
       }}
     />
   );
