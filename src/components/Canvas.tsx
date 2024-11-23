@@ -1,35 +1,51 @@
-import React, { useState } from 'react';
-import { useDroppable, DndContext, DragOverlay, DragEndEvent, DragStartEvent, DragMoveEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { snapToGrid, detectCollision } from '../utils/grid';
+import React, { useState, useEffect } from 'react';
+import { DndContext, DragEndEvent, DragOverlay, useSensor, useSensors, PointerSensor, MouseSensor } from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
+import { useDroppable } from '@dnd-kit/core';
+import GridLayout from 'react-grid-layout';
 import { useBuilderStore } from '../store/builderStore';
-import { ComponentRenderer } from './ComponentRenderer';
-import { Grid } from './Grid';
-import { Smartphone, Tablet, Monitor, Code } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { CodePreview } from './CodePreview';
-import type { ComponentType } from '../types';
-
-const GRID_SIZE = 20;
+import { Smartphone, Tablet, Monitor, Code, Trash2 } from 'lucide-react';
+import { GridItem } from './GridItem';
+import { ComponentRenderer } from './ComponentRenderer';
+import { nanoid } from '../utils/nanoid';
+import { ContextMenu } from './ContextMenu';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 
 type Viewport = 'mobile' | 'tablet' | 'desktop';
 
 const viewportSizes = {
-  mobile: { width: '375px', height: '667px' },
-  tablet: { width: '768px', height: '1024px' },
-  desktop: { width: '100%', height: '100%' },
+  mobile: { width: 375, height: 667 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1200, height: 800 },
 };
 
+const GRID_COLS = {
+  mobile: 4,
+  tablet: 8,
+  desktop: 12,
+};
+
+const GRID_ROW_HEIGHT = 50;
+
 export const Canvas: React.FC = () => {
-  const { components, selectComponent, selectedComponent, updateComponent, addComponent } = useBuilderStore();
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const { components, selectComponent, selectedComponent, updateComponent, addComponent, removeComponent } = useBuilderStore();
   const [viewport, setViewport] = useState<Viewport>('desktop');
   const [showCode, setShowCode] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; componentId: string } | null>(null);
 
   const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 4,
+        distance: 5,
       },
     })
   );
@@ -38,104 +54,102 @@ export const Canvas: React.FC = () => {
     id: 'canvas',
   });
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    if (!active) return;
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedComponent) {
+        removeComponent(selectedComponent.id);
+      }
+    };
 
-    setActiveId(active.id as string);
-    
-    const activeComponent = components.find(c => c.id === active.id);
-    if (activeComponent && event.delta) {
-      const currentLeft = parseInt(activeComponent.props.style.left as string) || 0;
-      const currentTop = parseInt(activeComponent.props.style.top as string) || 0;
-      
-      setDragOffset({
-        x: currentLeft - (event.delta.x || 0),
-        y: currentTop - (event.delta.y || 0),
-      });
-    } else {
-      setDragOffset({ x: 0, y: 0 });
-    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedComponent, removeComponent]);
+
+  const generateLayout = () => {
+    return components.map((component) => {
+      const width = parseInt(component.props.style.width as string || '200');
+      const height = parseInt(component.props.style.height as string || '100');
+      const x = parseInt(component.props.style.left as string || '0');
+      const y = parseInt(component.props.style.top as string || '0');
+
+      return {
+        i: component.id,
+        x: Math.floor(x / GRID_ROW_HEIGHT),
+        y: Math.floor(y / GRID_ROW_HEIGHT),
+        w: Math.max(1, Math.ceil(width / GRID_ROW_HEIGHT)),
+        h: Math.max(1, Math.ceil(height / GRID_ROW_HEIGHT)),
+        minW: 1,
+        minH: 1,
+        resizeHandles: ['se', 'sw', 'ne', 'nw', 'e', 'w', 'n', 's'],
+      };
+    });
   };
 
-  const handleDragMove = (event: DragMoveEvent) => {
-    const { active, delta } = event;
-    if (!active || !delta) return;
-
-    const activeComponent = components.find(c => c.id === active.id);
-    if (!activeComponent) return;
-
-    const newX = snapToGrid(dragOffset.x + delta.x, GRID_SIZE);
-    const newY = snapToGrid(dragOffset.y + delta.y, GRID_SIZE);
-
-    const componentWidth = parseInt(activeComponent.props.style.width as string) || 100;
-    const componentHeight = parseInt(activeComponent.props.style.height as string) || 40;
-
-    const otherComponents = components.filter(c => c.id !== active.id);
-    const hasCollision = otherComponents.some(component => {
-      const activeRect = {
-        left: newX,
-        right: newX + componentWidth,
-        top: newY,
-        bottom: newY + componentHeight,
-      };
-      
-      const otherRect = {
-        left: parseInt(component.props.style.left as string) || 0,
-        right: (parseInt(component.props.style.left as string) || 0) + (parseInt(component.props.style.width as string) || 100),
-        top: parseInt(component.props.style.top as string) || 0,
-        bottom: (parseInt(component.props.style.top as string) || 0) + (parseInt(component.props.style.height as string) || 40),
-      };
-
-      return detectCollision(activeRect as DOMRect, otherRect as DOMRect);
-    });
-
-    if (!hasCollision) {
-      updateComponent(activeComponent.id, {
-        props: {
-          ...activeComponent.props,
-          style: {
-            ...activeComponent.props.style,
-            position: 'absolute',
-            left: `${newX}px`,
-            top: `${newY}px`,
-            zIndex: 1,
+  const handleLayoutChange = (layout: ReactGridLayout.Layout[]) => {
+    layout.forEach((item) => {
+      const component = components.find((c) => c.id === item.i);
+      if (component) {
+        updateComponent(component.id, {
+          props: {
+            ...component.props,
+            style: {
+              ...component.props.style,
+              left: `${item.x * GRID_ROW_HEIGHT}px`,
+              top: `${item.y * GRID_ROW_HEIGHT}px`,
+              width: `${item.w * GRID_ROW_HEIGHT}px`,
+              height: `${item.h * GRID_ROW_HEIGHT}px`,
+            },
           },
-        },
-      });
-    }
+        });
+      }
+    });
+  };
+
+  const calculateGridPosition = (clientX: number, clientY: number) => {
+    const canvasElement = document.querySelector('.layout') as HTMLElement;
+    if (!canvasElement) return { x: 0, y: 0 };
+
+    const canvasRect = canvasElement.getBoundingClientRect();
+    const relativeX = clientX - canvasRect.left;
+    const relativeY = clientY - canvasRect.top;
+
+    return {
+      x: Math.floor(relativeX / GRID_ROW_HEIGHT),
+      y: Math.floor(relativeY / GRID_ROW_HEIGHT),
+    };
+  };
+
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { over, active } = event;
     
-    if (over && over.id === 'canvas' && active?.data.current) {
-      const componentType = active.data.current.type;
-      const existingComponent = components.find(c => c.id === active.id);
+    if (over && over.id === 'canvas') {
+      const componentType = active.data.current?.type;
       
-      if (!existingComponent && componentType && !active.data.current.component) {
-        const canvasRect = over.rect;
-        const dropPoint = {
-          x: event.delta?.x || 0,
-          y: event.delta?.y || 0,
-        };
+      if (componentType && active.id.toString().startsWith('toolbar-')) {
+        const { x: gridX, y: gridY } = calculateGridPosition(event.activatorEvent.clientX, event.activatorEvent.clientY);
 
-        const newX = snapToGrid(dropPoint.x, GRID_SIZE);
-        const newY = snapToGrid(dropPoint.y, GRID_SIZE);
+        const defaultWidth = 4;
+        const defaultHeight = 2;
 
-        const newComponent: ComponentType = {
-          id: `component-${Date.now()}`,
+        // Ensure the component stays within grid boundaries
+        const maxX = GRID_COLS[viewport] - defaultWidth;
+        const adjustedX = Math.min(Math.max(0, gridX), maxX);
+
+        const newComponent = {
+          id: nanoid(),
           type: componentType,
           props: {
             style: {
-              position: 'absolute',
-              left: `${newX}px`,
-              top: `${newY}px`,
-              zIndex: 1,
-              width: '100%',
-              maxWidth: viewport === 'desktop' ? '100%' : viewportSizes[viewport].width,
+              left: `${adjustedX * GRID_ROW_HEIGHT}px`,
+              top: `${gridY * GRID_ROW_HEIGHT}px`,
+              width: `${defaultWidth * GRID_ROW_HEIGHT}px`,
+              height: `${defaultHeight * GRID_ROW_HEIGHT}px`,
             },
-            children: componentType === 'text' ? 'New Text' : undefined,
+            children: componentType === 'text' ? 'New Text' : componentType === 'button' ? 'Button' : '',
           },
         };
         
@@ -144,17 +158,24 @@ export const Canvas: React.FC = () => {
     }
     
     setActiveId(null);
-    setDragOffset({ x: 0, y: 0 });
   };
 
-  const activeComponent = components.find(c => c.id === activeId);
+  const handleContextMenu = (e: React.MouseEvent, componentId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, componentId });
+  };
+
+  const handleDeleteComponent = (componentId: string) => {
+    removeComponent(componentId);
+    setContextMenu(null);
+  };
 
   return (
-    <DndContext
+    <DndContext 
       sensors={sensors}
       onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
+      modifiers={[snapCenterToCursor]}
     >
       <div className="flex-1 bg-gray-50 overflow-hidden">
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 flex justify-between">
@@ -205,35 +226,38 @@ export const Canvas: React.FC = () => {
                 >
                   <div
                     ref={setNodeRef}
-                    className={`relative min-h-[calc(100vh-4rem)] bg-white ${
-                      isOver ? 'ring-2 ring-blue-400 ring-opacity-50' : ''
-                    }`}
+                    className={`relative bg-white min-h-[600px] ${isOver ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
+                    style={{
+                      backgroundImage: 'linear-gradient(to right, #f0f0f0 1px, transparent 1px), linear-gradient(to bottom, #f0f0f0 1px, transparent 1px)',
+                      backgroundSize: `${GRID_ROW_HEIGHT}px ${GRID_ROW_HEIGHT}px`,
+                    }}
                   >
-                    <Grid size={GRID_SIZE} />
-                    
-                    {components.map((component) => (
-                      <ComponentRenderer
-                        key={component.id}
-                        component={component}
-                        isSelected={selectedComponent?.id === component.id}
-                        isDragging={component.id === activeId}
-                        onClick={() => selectComponent(component)}
-                        viewport={viewport}
-                      />
-                    ))}
-
-                    <DragOverlay dropAnimation={null}>
-                      {activeId && activeComponent && (
-                        <ComponentRenderer
-                          component={activeComponent}
-                          isSelected={false}
-                          isDragging={false}
-                          isOverlay={true}
-                          onClick={() => {}}
-                          viewport={viewport}
-                        />
-                      )}
-                    </DragOverlay>
+                    <GridLayout
+                      className="layout"
+                      layout={generateLayout()}
+                      cols={GRID_COLS[viewport]}
+                      rowHeight={GRID_ROW_HEIGHT}
+                      width={viewportSizes[viewport].width}
+                      onLayoutChange={handleLayoutChange}
+                      isDraggable
+                      isResizable
+                      compactType={null}
+                      preventCollision
+                      margin={[0, 0]}
+                      containerPadding={[0, 0]}
+                      useCSSTransforms={false}
+                    >
+                      {components.map((component) => (
+                        <div key={component.id} onContextMenu={(e) => handleContextMenu(e, component.id)}>
+                          <GridItem
+                            component={component}
+                            isSelected={selectedComponent?.id === component.id}
+                            onClick={() => selectComponent(component)}
+                            viewport={viewport}
+                          />
+                        </div>
+                      ))}
+                    </GridLayout>
                   </div>
                 </div>
               </div>
@@ -249,6 +273,29 @@ export const Canvas: React.FC = () => {
             </>
           )}
         </PanelGroup>
+
+        <DragOverlay>
+          {activeId && (
+            <div className="bg-white border border-gray-200 rounded-md p-4 shadow-lg opacity-50 pointer-events-none">
+              {activeId.toString().replace('toolbar-', '')}
+            </div>
+          )}
+        </DragOverlay>
+
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+            items={[
+              {
+                label: 'Delete',
+                icon: <Trash2 className="w-4 h-4" />,
+                onClick: () => handleDeleteComponent(contextMenu.componentId),
+              },
+            ]}
+          />
+        )}
       </div>
     </DndContext>
   );
