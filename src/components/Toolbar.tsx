@@ -6,17 +6,7 @@ import {
   Square,
   Layout,
   Video,
-  Maximize2,
   Minus,
-  GripVertical,
-  Grid as GridIcon,
-  Menu as MenuIcon,
-  Code,
-  Undo2,
-  Redo2,
-  Save,
-  Download,
-  Link,
   Mail,
   Search,
   AlertCircle,
@@ -30,7 +20,8 @@ import {
   SlidersHorizontal,
   Radio,
   CheckSquare,
-  ChevronDown
+  ChevronDown,
+  Link
 } from 'lucide-react';
 import { useBuilderStore } from '../store/builderStore';
 
@@ -42,7 +33,6 @@ const components = [
   { type: 'image', icon: ImageIcon, label: 'Image' },
   { type: 'video', icon: Video, label: 'Video' },
   { type: 'container', icon: Layout, label: 'Container' },
-  { type: 'card', icon: Square, label: 'Card' },
   { type: 'table', icon: TableIcon, label: 'Table' },
   { type: 'list', icon: List, label: 'List' },
   { type: 'divider', icon: Minus, label: 'Divider' },
@@ -62,7 +52,7 @@ const components = [
 ];
 
 const DraggableComponent = ({ type, icon: Icon, label }: typeof components[0]) => {
-  const { attributes, listeners, setNodeRef } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `toolbar-${type}`,
     data: { type },
   });
@@ -72,7 +62,9 @@ const DraggableComponent = ({ type, icon: Icon, label }: typeof components[0]) =
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className="flex flex-col items-center p-3 bg-white rounded-md border border-gray-200 cursor-move hover:border-blue-500 transition-colors"
+      className={`flex flex-col items-center p-3 bg-white rounded-md border border-gray-200 cursor-move hover:border-blue-500 transition-colors ${
+        isDragging ? 'opacity-50' : ''
+      }`}
     >
       <Icon className="w-5 h-5 mb-1 text-gray-600" />
       <span className="text-xs text-gray-600">{label}</span>
@@ -119,28 +111,28 @@ export const Toolbar: React.FC = () => {
           className="p-2 hover:bg-gray-100 rounded-md"
           title="Undo"
         >
-          <Undo2 className="w-5 h-5" />
+          Undo
         </button>
         <button
           onClick={redo}
           className="p-2 hover:bg-gray-100 rounded-md"
           title="Redo"
         >
-          <Redo2 className="w-5 h-5" />
+          Redo
         </button>
         <button
           onClick={saveProject}
           className="p-2 hover:bg-gray-100 rounded-md"
           title="Save Project"
         >
-          <Save className="w-5 h-5" />
+          Save
         </button>
         <button
           onClick={exportCode}
           className="p-2 hover:bg-gray-100 rounded-md"
           title="Export Code"
         >
-          <Download className="w-5 h-5" />
+          Export
         </button>
       </div>
     </div>
