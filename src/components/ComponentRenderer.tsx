@@ -29,27 +29,38 @@ export const ComponentRenderer: React.FC<ComponentRendererProps> = ({
   const renderComponent = () => {
     const commonProps = {
       className: cn(
-        'w-full h-full',
+        'w-full h-full flex items-center justify-center',
         isSelected && 'ring-2 ring-blue-500',
         component.props.className
       ),
       style: {
         ...component.props.style,
+        padding: 0,
         margin: 0,
         position: 'static',
       },
     };
 
+    const responsiveClasses = {
+      mobile: 'text-sm',
+      tablet: 'text-base',
+      desktop: 'text-lg',
+    };
+
     switch (component.type) {
       case 'text':
         return (
-          <p {...commonProps}>
+          <p {...commonProps} className={cn(commonProps.className, responsiveClasses[viewport])}>
             {component.props.children || 'Text'}
           </p>
         );
       case 'heading':
         return (
-          <h2 {...commonProps}>
+          <h2 {...commonProps} className={cn(commonProps.className, {
+            'text-lg': viewport === 'mobile',
+            'text-xl': viewport === 'tablet',
+            'text-2xl': viewport === 'desktop',
+          })}>
             {component.props.children || 'Heading'}
           </h2>
         );
@@ -59,7 +70,12 @@ export const ComponentRenderer: React.FC<ComponentRendererProps> = ({
             {...commonProps}
             type="button"
             className={cn(
-              'px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600',
+              'bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors',
+              {
+                'px-3 py-1.5 text-sm': viewport === 'mobile',
+                'px-4 py-2 text-base': viewport === 'tablet',
+                'px-6 py-2.5 text-lg': viewport === 'desktop',
+              },
               commonProps.className
             )}
           >
@@ -72,20 +88,29 @@ export const ComponentRenderer: React.FC<ComponentRendererProps> = ({
             {...commonProps}
             src={component.props.src || 'https://via.placeholder.com/150'}
             alt={component.props.alt || 'Image'}
+            className={cn(commonProps.className, 'object-cover')}
           />
         );
       case 'container':
         return (
           <div
             {...commonProps}
-            className={cn('p-4 border border-gray-200 rounded-md', commonProps.className)}
+            className={cn(
+              'border border-gray-200 rounded-md',
+              {
+                'p-2': viewport === 'mobile',
+                'p-3': viewport === 'tablet',
+                'p-4': viewport === 'desktop',
+              },
+              commonProps.className
+            )}
           >
             {component.props.children || 'Container'}
           </div>
         );
       default:
         return (
-          <div {...commonProps}>
+          <div {...commonProps} className={cn(commonProps.className, responsiveClasses[viewport])}>
             {component.type} component
           </div>
         );
@@ -101,7 +126,7 @@ export const ComponentRenderer: React.FC<ComponentRendererProps> = ({
         e.stopPropagation();
         onClick();
       }}
-      className="w-full h-full"
+      className="w-full h-full flex items-center justify-center"
       style={{ cursor: 'move' }}
     >
       {renderComponent()}
