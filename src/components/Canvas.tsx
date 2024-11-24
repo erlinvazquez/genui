@@ -28,7 +28,9 @@ const GRID_COLS = {
   desktop: 12,
 };
 
-const GRID_ROW_HEIGHT = 50;
+const GRID_ROW_HEIGHT = 30;
+const GRID_MARGIN = 0;
+const GRID_PADDING = 0;
 
 export const Canvas: React.FC = () => {
   const { components, selectComponent, selectedComponent, updateComponent, addComponent, removeComponent } = useBuilderStore();
@@ -80,6 +82,7 @@ export const Canvas: React.FC = () => {
         h: Math.max(1, Math.ceil(height / GRID_ROW_HEIGHT)),
         minW: 1,
         minH: 1,
+        maxW: GRID_COLS[viewport],
         resizeHandles: ['se', 'sw', 'ne', 'nw', 'e', 'w', 'n', 's'],
       };
     });
@@ -132,10 +135,13 @@ export const Canvas: React.FC = () => {
       if (componentType && active.id.toString().startsWith('toolbar-')) {
         const { x: gridX, y: gridY } = calculateGridPosition(event.activatorEvent.clientX, event.activatorEvent.clientY);
 
-        const defaultWidth = 4;
-        const defaultHeight = 2;
+        const defaultSizes = {
+          mobile: { w: 2, h: 2 },
+          tablet: { w: 3, h: 2 },
+          desktop: { w: 4, h: 2 },
+        };
 
-        // Ensure the component stays within grid boundaries
+        const { w: defaultWidth, h: defaultHeight } = defaultSizes[viewport];
         const maxX = GRID_COLS[viewport] - defaultWidth;
         const adjustedX = Math.min(Math.max(0, gridX), maxX);
 
@@ -243,8 +249,8 @@ export const Canvas: React.FC = () => {
                       isResizable
                       compactType={null}
                       preventCollision
-                      margin={[0, 0]}
-                      containerPadding={[0, 0]}
+                      margin={[GRID_MARGIN, GRID_MARGIN]}
+                      containerPadding={[GRID_PADDING, GRID_PADDING]}
                       useCSSTransforms={false}
                     >
                       {components.map((component) => (
